@@ -4,6 +4,14 @@ import pandas as pd
 import json
 from datetime import datetime
 
+# --- FUNCȚIE AJUTĂTOARE PENTRU NUMERE ---
+def safe_int(value):
+    """Transformă orice valoare în număr întreg, returnează 0 dacă e eroare."""
+    try:
+        return int(str(value).strip())
+    except (ValueError, TypeError):
+        return 0
+
 # --- CONFIGURARE SECRETE ---
 creds_json = st.secrets["GOOGLE_SHEETS_JSON"]
 creds_dict = json.loads(creds_json)
@@ -22,7 +30,10 @@ tab1, tab2, tab3 = st.tabs(["Clasament", "Istoric", "Admin"])
 with tab1:
     st.header("Punctaj Total")
     df = pd.DataFrame(ws_utilizatori.get_all_records())
-    st.dataframe(df, use_container_width=True)
+    if not df.empty:
+        st.dataframe(df, width='stretch')
+    else:
+        st.write("Nu există date încă.")
 
 with tab2:
     st.header("Istoric Provocări")
@@ -34,38 +45,34 @@ with tab3:
     parola = st.text_input("Parolă Admin", type="password")
 
     if parola == "secret123":
-        # Expander 1: Adaugă Punctaj pentru Utilizator
+        # 1. Adaugă Punctaj
         with st.expander("➕ Adaugă Punctaj pentru Utilizator"):
             users = ws_utilizatori.col_values(1)[1:]
-            provocari_data = ws_provocari.get_all_records()
-            df_provocari = pd.DataFrame(provocari_data)
+            df_provocari = pd.DataFrame(ws_provocari.get_all_records())
 
-            # Verificăm dacă există coloanele exact cum le-ai definit tu
+            # Verificare coloane
             if not df_provocari.empty and 'Nume_Provocare' in df_provocari.columns and 'barem punctare' in df_provocari.columns:
                 nume_selectat = st.selectbox("Utilizator", users)
                 prov_selectata = st.selectbox("Provocare", df_provocari['Nume_Provocare'].tolist())
 
                 if st.button("Înregistrează Punctaj"):
-                    # Preluăm punctajul din coloana 'barem punctare'
-                    puncte = int(
-                        df_provocari.loc[df_provocari['Nume_Provocare'] == prov_selectata, 'barem punctare'].values[0])
+                    row_data = df_provocari.loc[df_provocari['Nume_Provocare'] == prov_selectata]
+                    puncte = safe_int(row_data['barem punctare'].values[0])
 
-                    # Adăugăm în istoric
                     ws_istoric.append_row([datetime.now().strftime("%d/%m/%Y"), nume_selectat, prov_selectata, puncte])
-
-                    # Actualizăm punctaj total (presupunând că ai coloana Punctaj_Total în Utilizatori)
+                    
                     celula = ws_utilizatori.find(nume_selectat)
-                    scor_vechi = int(ws_utilizatori.cell(celula.row, 2).value)
+                    val_actuala = ws_utilizatori.cell(celula.row, 2).value
+                    scor_vechi = safe_int(val_actuala)
+                    
                     ws_utilizatori.update_cell(celula.row, 2, scor_vechi + puncte)
-
                     st.success(f"Adăugat: {puncte} puncte!")
                     st.rerun()
             else:
-                st.error(
-                    f"Eroare: Verifică dacă în fila 'Provocari' ai coloanele exact așa: 'Nume_Provocare' și 'barem punctare'.")
-                st.write("Coloanele găsite sunt:", df_provocari.columns.tolist())
+                st.error("Eroare: Verifică dacă în fila 'Provocari' antetul este exact: 'Nume_Provocare' și 'barem punctare'.")
+                st.write("Coloane găsite:", df_provocari.columns.tolist())
 
-        # Expander 2: Adaugă Utilizator Nou
+        # 2. Adaugă Utilizator
         with st.expander("👤 Adaugă Utilizator Nou"):
             nume_nou = st.text_input("Nume Utilizator")
             if st.button("Salvează Utilizator"):
@@ -73,16 +80,17 @@ with tab3:
                 st.success(f"Utilizatorul {nume_nou} a fost adăugat!")
                 st.rerun()
 
-        # Expander 3: Adaugă Provocare Nouă
+        # 3. Adaugă Provocare
         with st.expander("🎯 Adaugă Provocare Nouă"):
-            id_prov = st.text_input("ID Provocare (ex: 1, 2, 3)")
+            id_prov = st.text_input("ID Provocare")
             nume_prov = st.text_input("Nume Provocare")
             desc_prov = st.text_input("Descriere")
-            puncte_prov = st.number_input("Puncte", min_value=0)
+            puncte_prov = st.number_input("Puncte", min_value=0, step=1)
 
             if st.button("Salvează Provocare"):
+                # Asigură-te că ordinea coloanelor este: ID | Nume | Descriere | Barem
                 ws_provocari.append_row([id_prov, nume_prov, desc_prov, puncte_prov])
                 st.success("Provocare adăugată!")
                 st.rerun()
     else:
-        st.warning("Introdu parola de admin pentru a modifica datele.")
+        if parola: st.warning("Parolă incorectă.")
