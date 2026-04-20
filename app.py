@@ -34,27 +34,36 @@ with tab3:
     parola = st.text_input("Parolă Admin", type="password")
 
     if parola == "secret123":
-        # Expander 1: Adaugă Punctaj
+        # Expander 1: Adaugă Punctaj pentru Utilizator
         with st.expander("➕ Adaugă Punctaj pentru Utilizator"):
             users = ws_utilizatori.col_values(1)[1:]
             provocari_data = ws_provocari.get_all_records()
             df_provocari = pd.DataFrame(provocari_data)
 
-            if not df_provocari.empty and 'Nume_Provocare' in df_provocari.columns:
+            # Verificăm dacă există coloanele exact cum le-ai definit tu
+            if not df_provocari.empty and 'Nume_Provocare' in df_provocari.columns and 'barem punctare' in df_provocari.columns:
                 nume_selectat = st.selectbox("Utilizator", users)
                 prov_selectata = st.selectbox("Provocare", df_provocari['Nume_Provocare'].tolist())
 
                 if st.button("Înregistrează Punctaj"):
-                    puncte = int(df_provocari.loc[df_provocari['Nume_Provocare'] == prov_selectata, 'Puncte_Standard'].values[0])
+                    # Preluăm punctajul din coloana 'barem punctare'
+                    puncte = int(
+                        df_provocari.loc[df_provocari['Nume_Provocare'] == prov_selectata, 'barem punctare'].values[0])
+
+                    # Adăugăm în istoric
                     ws_istoric.append_row([datetime.now().strftime("%d/%m/%Y"), nume_selectat, prov_selectata, puncte])
-                    
+
+                    # Actualizăm punctaj total (presupunând că ai coloana Punctaj_Total în Utilizatori)
                     celula = ws_utilizatori.find(nume_selectat)
                     scor_vechi = int(ws_utilizatori.cell(celula.row, 2).value)
                     ws_utilizatori.update_cell(celula.row, 2, scor_vechi + puncte)
-                    st.success("Punctaj adăugat!")
+
+                    st.success(f"Adăugat: {puncte} puncte!")
                     st.rerun()
             else:
-                st.error("Eroare: Verifică dacă fila 'Provocari' are antetul 'Nume_Provocare'.")
+                st.error(
+                    f"Eroare: Verifică dacă în fila 'Provocari' ai coloanele exact așa: 'Nume_Provocare' și 'barem punctare'.")
+                st.write("Coloanele găsite sunt:", df_provocari.columns.tolist())
 
         # Expander 2: Adaugă Utilizator Nou
         with st.expander("👤 Adaugă Utilizator Nou"):
@@ -70,7 +79,7 @@ with tab3:
             nume_prov = st.text_input("Nume Provocare")
             desc_prov = st.text_input("Descriere")
             puncte_prov = st.number_input("Puncte", min_value=0)
-            
+
             if st.button("Salvează Provocare"):
                 ws_provocari.append_row([id_prov, nume_prov, desc_prov, puncte_prov])
                 st.success("Provocare adăugată!")
