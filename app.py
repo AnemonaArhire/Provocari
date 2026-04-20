@@ -54,34 +54,30 @@ with tab3:
     if parola == "secret123":
         # 1. Adaugă Punctaj
         with st.expander("➕ Adaugă Punctaj"):
-            # Presupunem că în fila Utilizatori coloana B este "nume utilizator"
-            users = ws_utilizatori.col_values(2)[1:] 
+            users = ws_utilizatori.col_values(2)[1:]
             df_provocari = pd.DataFrame(ws_provocari.get_all_records())
             
             nume_selectat = st.selectbox("Utilizator", users)
             prov_selectata = st.selectbox("Provocare", df_provocari['Nume_Provocare'].tolist())
-            
             default_pts = int(df_provocari.loc[df_provocari['Nume_Provocare'] == prov_selectata, 'barem punctare'].values[0])
             puncte_input = st.number_input("Puncte acordate", value=default_pts)
 
             if st.button("Înregistrează Punctaj"):
-                # Ordinea: [data, id utilizat, tip provocare, punctaj]
-                ws_istoric.append_row([datetime.now().strftime("%d/%m/%Y"), nume_selectat, prov_selectata, puncte_input])
-                
-                # Update Punctaj Utilizator (Coloana 3 = punctaj toatal)
-                celula = ws_utilizatori.find(nume_selectat)
-                val_actuala = ws_utilizatori.cell(celula.row, 3).value
-                ws_utilizatori.update_cell(celula.row, 3, safe_int(val_actuala) + puncte_input)
-                
-                st.success(f"Adăugat {puncte_input} puncte!")
+                with st.spinner("Se comunică cu Google Sheets..."):
+                    ws_istoric.append_row([datetime.now().strftime("%d/%m/%Y"), nume_selectat, prov_selectata, puncte_input])
+                    celula = ws_utilizatori.find(nume_selectat)
+                    val_actuala = ws_utilizatori.cell(celula.row, 3).value
+                    ws_utilizatori.update_cell(celula.row, 3, safe_int(val_actuala) + puncte_input)
+                st.success("Punctaj adăugat cu succes!")
                 st.rerun()
 
         # 2. Adaugă Utilizator Nou
         with st.expander("👤 Adaugă Utilizator Nou"):
-            nume_nou = st.text_input("Nume Utilizator")
+            nume_nou = st.text_input("Nume Utilizator", key="nume_input")
             if st.button("Salvează Utilizator"):
-                # Ordinea: [id, nume utilizator, punctaj toatal]
-                ws_utilizatori.append_row([len(users)+1, nume_nou, 0])
+                with st.spinner("Se salvează utilizatorul..."):
+                    ws_utilizatori.append_row([len(users)+1, nume_nou, 0])
+                st.success(f"Utilizatorul {nume_nou} a fost salvat!")
                 st.rerun()
 
         # 3. Adaugă Provocare Nouă
@@ -92,10 +88,10 @@ with tab3:
             puncte_prov = st.number_input("Barem Standard", min_value=0)
             
             if st.button("Salvează Provocare"):
-                # Ordinea: [id provocare, Nume_Provocare, descriere, barem punctare]
-                ws_provocari.append_row([id_prov, nume_prov, desc_prov, puncte_prov])
+                with st.spinner("Se salvează provocarea..."):
+                    ws_provocari.append_row([id_prov, nume_prov, desc_prov, puncte_prov])
                 st.success("Provocare adăugată!")
                 st.rerun()
     else:
-        st.warning("Introdu parola.")
+        if parola: st.error("Parolă greșită!")
         
