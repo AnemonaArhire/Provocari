@@ -1,48 +1,74 @@
 import streamlit as st
 import gspread
 import pandas as pd
+import json
 from datetime import datetime
 
-# Conectare (folosește fișierul JSON descărcat de la Google Cloud)
-gc = gspread.service_account(filename="credentials.json")
-sh = gc.open("NumeleDocumentuluiTau")
+# --- CONFIGURARE SECRETE ---
+# Citim JSON-ul din secretele Streamlit
+creds_json = st.secrets["GOOGLE_SHEETS_JSON"]
+creds_dict = json.loads(creds_json)
 
-# Încărcăm datele din fiecare filă
+# Conectare
+gc = gspread.service_account_from_dict(creds_dict)
+sh = gc.open("AppProvocari")  # <--- AICI PUNE NUMELE EXACT AL TABELULUI TĂU
+
+# Încărcăm filele
 ws_utilizatori = sh.worksheet("Utilizatori")
 ws_istoric = sh.worksheet("Istoric")
 ws_provocari = sh.worksheet("Provocari")
 
 st.title("🏆 Dashboard Provocări")
 
-# Creăm tab-uri în interfața aplicației pentru o organizare vizuală clară
-tab1, tab2, tab3 = st.tabs(["Clasament", "Istoric", "Admin (Doar tu)"])
+tab1, tab2, tab3 = st.tabs(["Clasament", "Istoric", "Admin"])
 
 with tab1:
     st.header("Punctaj Total")
-    df_utilizatori = pd.DataFrame(ws_utilizatori.get_all_records())
-    st.dataframe(df_utilizatori)
+    # Citim datele și le afișăm
+    data_utilizatori = ws_utilizatori.get_all_records()
+    df = pd.DataFrame(data_utilizatori)
+    st.dataframe(df, use_container_width=True)
 
 with tab2:
     st.header("Istoric Provocări")
-    df_istoric = pd.DataFrame(ws_istoric.get_all_records())
-    st.table(df_istoric)
+    data_istoric = ws_istoric.get_all_records()
+    st.table(pd.DataFrame(data_istoric))
 
 with tab3:
     st.header("Modificare Date")
     parola = st.text_input("Parolă Admin", type="password")
 
-    if parola == "secret123":
-        # Formular pentru a adăuga o provocare îndeplinită
-        nume = st.selectbox("Utilizator", ws_utilizatori.col_values(1)[1:])
-        provocare = st.selectbox("Provocare", ws_provocari.col_values(2)[1:])
+    if parola == "secret123":  # Schimbă parola aici
+        # Listăm utilizatorii și provocările
+        users = ws_utilizatori.col_values(1)[1:]  # Sărim peste cap de tabel
+        provocari_data = ws_provocari.get_all_records()
+        df_provocari = pd.DataFrame(provocari_data)
+
+        nume_selectat = st.selectbox("Selectează Utilizator", users)
+        prov_selectata = st.selectbox("Selectează Provocare", df_provocari['Nume_Provocare'].tolist())
 
         if st.button("Adaugă Punctaj"):
-            # 1. Adăugăm în Istoric
-            data_azi = datetime.now().strftime("%d/%m/%Y")
-            ws_istoric.append_row([data_azi, nume, provocare, 10])  # Presupunem 10 puncte
+            # 1. Găsim punctele pentru provocarea selectată
+            puncte_provocare = int(
+                df_provocari.loc[df_provocari['Nume_Provocare'] == prov_selectata, 'Puncte_Standard'].values[0])
 
-            # 2. Update Punctaj Total (Logica ta de calcul)
-            # Aici cauți rândul utilizatorului și actualizezi coloana Punctaj_Total
-            st.success(f"Provocare adăugată pentru {nume}!")
+            # 2. Adăugăm în Istoric
+            data_azi = datetime.now().strftime("%d/%m/%Y")
+            ws_istoric.append_row([data_azi, nume_selectat, prov_selectata, puncte_provocare])
+
+            # 3. Update Punctaj Total
+            # Căutăm rândul utilizatorului
+            celula_user = ws_utilizatori.find(nume_selectat)
+            row_index = celula_user.row
+
+            # Citim punctajul vechi
+            scor_vechi = int(ws_utilizatori.cell(row_index, 2).value)
+
+            # Calculăm și salvăm
+            ws_utilizatori.update_cell(row_index, 2, scor_vechi + puncte_provocare)
+
+            st.success(f"Adăugat: {puncte_provocare} puncte pentru {nume_selectat}!")
+            st.rerun()  # Reîmprospătăm pagina să se vadă scorul nou
+
     else:
         st.warning("Acces interzis.")
