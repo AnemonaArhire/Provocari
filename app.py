@@ -34,40 +34,46 @@ with tab1:
 with tab2:
     st.header("Istoric Provocări")
 
-    # 1. Citim datele
+    # Citim datele
     raw_istoric = ws_istoric.get_all_records()
     df_istoric = pd.DataFrame(raw_istoric)
 
-    # 2. FIX: Curățăm numele coloanelor de spații goale (stânga/dreapta)
+    # Curățăm spațiile goale de pe margini
     df_istoric.columns = df_istoric.columns.str.strip()
 
-    # DEBUG: Dacă tot crapă, șterge # de mai jos ca să vezi ce coloane sunt
-    # st.write("Coloanele găsite sunt:", df_istoric.columns.tolist())
+    # DEBUG: Această linie va afișa pe ecran exact cum vede Python coloanele tale
+    # Verifică ce scrie pe ecran în aplicație!
+    # st.write("Coloanele găsite în fila 'Istoric' sunt:", df_istoric.columns.tolist())
 
     if not df_istoric.empty:
-        # Filtre
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            # Ne asigurăm că folosim numele curățat
-            f_user = st.multiselect("Filtrează Utilizator", df_istoric['Nume_Utilizator'].unique())
-        with col2:
-            f_prov = st.multiselect("Filtrează Provocare", df_istoric['Tip_Provocare'].unique())
-        with col3:
-            sort_by = st.selectbox("Sortează după", ["Data", "Nume_Utilizator", "Puncte_Castigate"])
+        # Verificăm dacă coloana Nume_Utilizator chiar există
+        target_user_col = 'Nume_Utilizator'  # <<--- Dacă debug-ul de mai sus îți arată altceva, schimbă aici
+        target_prov_col = 'Tip_Provocare'  # <<--- Dacă debug-ul îți arată altceva, schimbă aici
 
-        # Aplicare Filtre
-        dff = df_istoric.copy()
-        if f_user: dff = dff[dff['Nume_Utilizator'].isin(f_user)]
-        if f_prov: dff = dff[dff['Tip_Provocare'].isin(f_prov)]
+        if target_user_col in df_istoric.columns and target_prov_col in df_istoric.columns:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                f_user = st.multiselect("Filtrează Utilizator", df_istoric[target_user_col].unique())
+            with col2:
+                f_prov = st.multiselect("Filtrează Provocare", df_istoric[target_prov_col].unique())
+            with col3:
+                sort_by = st.selectbox("Sortează după", ["Data", target_user_col, "Puncte_Castigate"])
 
-        # Sortare (verificăm dacă există coloana pentru sortare)
-        if sort_by in dff.columns:
-            dff = dff.sort_values(by=sort_by)
+            # Aplicare Filtre
+            dff = df_istoric.copy()
+            if f_user: dff = dff[dff[target_user_col].isin(f_user)]
+            if f_prov: dff = dff[dff[target_prov_col].isin(f_prov)]
 
-        st.table(dff)
+            # Sortare
+            if sort_by in dff.columns:
+                dff = dff.sort_values(by=sort_by)
+
+            st.table(dff)
+        else:
+            st.error("Eroare: Nu am găsit coloanele necesare în tabelul 'Istoric'.")
+            st.write("Coloanele pe care le-am găsit sunt:", df_istoric.columns.tolist())
     else:
         st.write("Istoricul este gol.")
-        
 with tab3:
     st.header("Zona Admin")
     parola = st.text_input("Parolă Admin", type="password")
